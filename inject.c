@@ -240,7 +240,7 @@ int inject(pid_t pid, const char *lib)
     /* 
      * Create thread - This is obviously hardware specific.  
      */
-    x86_thread_state64_t remoteThreadState64;
+    arm_thread_state64_t remoteThreadState64;
 
     thread_act_t remoteThread;
 
@@ -251,34 +251,38 @@ int inject(pid_t pid, const char *lib)
 
     const char *p = (const char *)remoteCode64;
 
-    remoteThreadState64.__rip = (u_int64_t)(vm_address_t)remoteCode64;
+    // remoteThreadState64.__rip = (u_int64_t)(vm_address_t)remoteCode64;
+    arm_thread_state64_set_pc_fptr(remoteThreadState64, (u_int64_t)(vm_address_t)remoteCode64);
 
     // set remote Stack Pointer
-    remoteThreadState64.__rsp = (u_int64_t)remoteStack64;
-    remoteThreadState64.__rbp = (u_int64_t)remoteStack64;
+    arm_thread_state64_set_sp(remoteThreadState64, (u_int64_t)remoteStack64);
+    // remoteThreadState64.__rbp = (u_int64_t)remoteStack64;
 
     printf("Remote Stack 64  0x%llx, Remote code is %p\n", remoteStack64, p);
 
     /*
 	 * create thread and launch it in one go
 	 */
-    kr = thread_create_running(remoteTask, x86_THREAD_STATE64,
-                               (thread_state_t)&remoteThreadState64, x86_THREAD_STATE64_COUNT, &remoteThread);
+    // kr = thread_create_running(remoteTask, x86_THREAD_STATE64,
+    //                            (thread_state_t)&remoteThreadState64, x86_THREAD_STATE64_COUNT, &remoteThread);
+    kr = thread_create_running(remoteTask, ARM_THREAD_STATE64,
+                               (thread_state_t)&remoteThreadState64, ARM_THREAD_STATE64_COUNT, &remoteThread);
     if (kr != KERN_SUCCESS) {
         fprintf(stderr, "Unable to create remote thread: error %s", mach_error_string(kr));
         return (-3);
     }
 
     // Wait for mach thread to finish
-    mach_msg_type_number_t thread_state_count = x86_THREAD_STATE64_COUNT;
+    // mach_msg_type_number_t thread_state_count = x86_THREAD_STATE64_COUNT;
+    mach_msg_type_number_t thread_state_count = ARM_THREAD_STATE64_COUNT;
     for (;;) {
-	    kr = thread_get_state(remoteThread, x86_THREAD_STATE64, (thread_state_t)&remoteThreadState64, &thread_state_count);
+	    kr = thread_get_state(remoteThread, ARM_THREAD_STATE64, (thread_state_t)&remoteThreadState64, &thread_state_count);
         if (kr != KERN_SUCCESS) {
             fprintf(stderr, "Error getting stub thread state: error %s", mach_error_string(kr));
             break;
         }
         
-        if (remoteThreadState64.__rax == 0xD13) {
+        if (remoteThreadState64.__x[0] == 0xD13) {
             printf("Stub thread finished\n");
             kr = thread_terminate(remoteThread);
             if (kr != KERN_SUCCESS) {
